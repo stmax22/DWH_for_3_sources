@@ -6,7 +6,7 @@
 - **Собирает данные as is** из трёх подсистем:
   - **PostgreSQL** — подсистема бонусных баллов (пользователи, ранги, транзакции)
   - **MongoDB** — подсистема обработки заказов (заказы, рестораны, пользователи)
-  - **REST API** — подсистема курьерской доставки (курьеры, доставки)
+  - **API** — подсистема курьерской доставки (курьеры, доставки)
 - **Хранит историю изменений** (SCD1, SCD2)
 - **Обеспечивает стабильность** при недоступности источников или изменении их формата
 - **Формирует витрины** для бизнес-аналитики
@@ -90,57 +90,7 @@
 **Особенности:**
 - Инкрементальная загрузка за период от последней загрузки до текущей даты (для `deliveries`)
 
-## Схемы данных
-
-### STG-слой
-Слой для хранения сырых данных из источников.
-
-#### PostgreSQL (бонусная система)
-| Таблица | Поля | Описание |
-|---------|------|----------|
-| `srv_wf_settings_posgresql` | `id`, `workflow_key`, `workflow_settings` | Курсор инкрементальной загрузки |
-| `bonussystem_users` | `id`, `order_user_id` | Связь пользователей |
-| `bonussystem_ranks` | `id`, `name`, `bonus_percent`, `min_payment_threshold` | Ранги |
-| `bonussystem_events` | `id`, `event_ts`, `event_type`, `event_value` | События |
-
-#### MongoDB (система заказов)
-| Таблица | Поля | Описание |
-|---------|------|----------|
-| `srv_wf_settings_mongodb` | `id`, `last_update_ts` | Курсор по времени |
-| `ordersystem_users` | `id`, `object_id`, `object_value`, `update_ts` | Пользователи |
-| `ordersystem_orders` | `id`, `object_id`, `object_value`, `update_ts` | Заказы |
-| `ordersystem_restaurants` | `id`, `object_id`, `object_value`, `update_ts` | Рестораны |
-
-#### API (курьерская служба)
-| Таблица | Поля | Описание |
-|---------|------|----------|
-| `couriers` | `courier_info` | Данные курьеров |
-| `deliveries` | `deliveri_info` | Данные доставок |
-
-### DDS-слой
-Модель данных «Снежинка» с SCD2 для изменяющихся измерений.
-![](https://github.com/stmax22/DWH_for_3_sources/blob/4ba47a09287f9ed83654b67483bbdffbdf70cb23/Diagram_DDS.png)
-
-#### Таблицы измерений
-| Таблица | Поля | Описание |
-|---------|---------|------|----------|
-| `dm_users` | `id`, `user_id`, `user_name`, `user_login` | Пользователи |
-| `dm_restaurants` | `id`, `restaurant_id`, `restaurant_name`, `active_from`, `active_to` | Рестораны |
-| `dm_products` | `id`, `restaurant_id`, `product_id`, `product_name`, `product_price`, `active_from`, `active_to` | Продукты |
-| `dm_timestamps` | `id`, `ts`, `year`, `month`, `day`, `time`, `date` | Временные метки |
-| `couriers` | `id`, `courier_id`, `courier_name` | Курьеры |
-
-#### Таблицы фактов
-| Таблица | Поля | Описание |
-|---------|------|----------|
-| `dm_orders` | `id`, `user_id`, `restaurant_id`, `courier_id`, `timestamp_id`, `order_key`, `order_status` | Заказы |
-| `deliveries` | `id`, `order_id`, `order_ts`, `courier_id`, `rate`, `tip_sum` | Доставки |
-| `fct_product_sales` | `id`, `product_id`, `order_id`, `count`, `price`, `total_sum`, `bonus_payment`, `bonus_grant` | Продажи по позициям |
-
-#### Сервисная таблица
-| Таблица | Поля | Описание |
-|---------|------|----------|
-| `srv_wf_settings_ts` | `id`, `last_update_date` | Курсор для инкрементальной загрузки DDS |
+## Слои данных
 
 ### CDM-слой
 Широкие витрины с бизнес-агрегатами.
@@ -197,3 +147,53 @@
 - `courier_reward_sum` = `courier_order_sum` + `courier_tips_sum` × 0.95 (5% — комиссия за обработку платежа)
 - Уникальный ключ: `(courier_id, settlement_year, settlement_month)`
 - Отчёт собирается по **дате заказа**, а не доставки
+
+### DDS-слой
+Модель данных «Снежинка» с SCD2 для изменяющихся измерений.
+![](https://github.com/stmax22/DWH_for_3_sources/blob/4ba47a09287f9ed83654b67483bbdffbdf70cb23/Diagram_DDS.png)
+
+#### Таблицы измерений
+| Таблица | Поля | Описание |
+|---------|------|----------|
+| `dm_users` | `id`, `user_id`, `user_name`, `user_login` | Пользователи |
+| `dm_restaurants` | `id`, `restaurant_id`, `restaurant_name`, `active_from`, `active_to` | Рестораны |
+| `dm_products` | `id`, `restaurant_id`, `product_id`, `product_name`, `product_price`, `active_from`, `active_to` | Продукты |
+| `dm_timestamps` | `id`, `ts`, `year`, `month`, `day`, `time`, `date` | Временные метки |
+| `couriers` | `id`, `courier_id`, `courier_name` | Курьеры |
+
+#### Таблицы фактов
+| Таблица | Поля | Описание |
+|---------|------|----------|
+| `dm_orders` | `id`, `user_id`, `restaurant_id`, `courier_id`, `timestamp_id`, `order_key`, `order_status` | Заказы |
+| `deliveries` | `id`, `order_id`, `order_ts`, `courier_id`, `rate`, `tip_sum` | Доставки |
+| `fct_product_sales` | `id`, `product_id`, `order_id`, `count`, `price`, `total_sum`, `bonus_payment`, `bonus_grant` | Продажи по позициям |
+
+#### Сервисная таблица
+| Таблица | Поля | Описание |
+|---------|------|----------|
+| `srv_wf_settings_ts` | `id`, `last_update_date` | Курсор для инкрементальной загрузки DDS |
+
+### STG-слой
+Слой для хранения сырых данных из источников.
+
+#### PostgreSQL (бонусная система)
+| Таблица | Поля | Описание |
+|---------|------|----------|
+| `srv_wf_settings_posgresql` | `id`, `workflow_key`, `workflow_settings` | Курсор инкрементальной загрузки |
+| `bonussystem_users` | `id`, `order_user_id` | Связь пользователей |
+| `bonussystem_ranks` | `id`, `name`, `bonus_percent`, `min_payment_threshold` | Ранги |
+| `bonussystem_events` | `id`, `event_ts`, `event_type`, `event_value` | События |
+
+#### MongoDB (система заказов)
+| Таблица | Поля | Описание |
+|---------|------|----------|
+| `srv_wf_settings_mongodb` | `id`, `last_update_ts` | Курсор по времени |
+| `ordersystem_users` | `id`, `object_id`, `object_value`, `update_ts` | Пользователи |
+| `ordersystem_orders` | `id`, `object_id`, `object_value`, `update_ts` | Заказы |
+| `ordersystem_restaurants` | `id`, `object_id`, `object_value`, `update_ts` | Рестораны |
+
+#### API (курьерская служба)
+| Таблица | Поля | Описание |
+|---------|------|----------|
+| `couriers` | `courier_info` | Данные курьеров |
+| `deliveries` | `deliveri_info` | Данные доставок |
